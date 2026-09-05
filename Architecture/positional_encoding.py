@@ -19,10 +19,10 @@ class PositionalEncoding(nn.Module):
         self.positional_encoding[:, 0::2] = torch.sin(position * sinusoidal_term)
         self.positional_encoding[:, 1::2] = torch.cos(position * sinusoidal_term)
 
-        positional_encoding = positional_encoding.unsqueeze(0)
+        self.positional_encoding = self.positional_encoding.unsqueeze(0)
 
         #Specifying for the model that this is part of the model but not a trainable parameter
-        self.register_buffer('positional_encoding', positional_encoding)
+        self.register_buffer('positional_encoding', self.positional_encoding)
 
 
     def forward(self, x):
