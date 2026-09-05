@@ -19,3 +19,18 @@ class EncoderBlock(nn.Module):
         x = self.residual2(x, self.ff)
 
         return x
+
+
+class Encoder(nn.Module):
+    def __init__(self, nb_heads, d_model, nb_layers, d_ff, dropout=0.1):
+        super().__init__()
+        self.layers = nn.ModuleList([EncoderBlock(d_model, nb_heads, d_ff, dropout) for _ in range(nb_layers)])
+        self.norm = nn.LayerNorm(d_model)
+
+    def forward(self, x, mask=None):
+        for layer in self.layers:
+            x = layer(x, mask)
+
+        x = self.norm(x)
+
+        return x
