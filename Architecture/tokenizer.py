@@ -32,8 +32,6 @@ class Tokenizer:
         return self.tokenizer.decode(token_ids, skip_special_tokens=True)
 
 
-
-
 """tokenizer = Tokenizer()
 
 texts = ["Hello World", "Transformers are cool"]
