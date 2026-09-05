@@ -33,4 +33,20 @@ class DecoderBlock(nn.Module):
 
         return x
 
+
+class Decoder(nn.Module):
+    def __init__(self, nb_layers, d_model, nb_heads, d_ff, dropout=0.1):
+        super().__init__()
+        self.layers = nn.ModuleList([DecoderBlock(d_model, nb_heads, d_ff, dropout) for _ in range(nb_layers)])
+
+        self.norm = nn.LayerNorm(d_model)
+
+    def forward(self, x, encoder_output, src_mask = None, target_mask = None):
+        for layer in self.laeyers:
+            x = layer(x, encoder_output, src_mask, target_mask)
+
+        x = self.norm(x)
+
+        return x
+
         
