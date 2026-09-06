@@ -13,20 +13,20 @@ class Transformer(nn.Module):
         self.source_pe = positional_encoding.PositionalEncoding(d_model, max_seq_length, dropout)
         self.target_pe = positional_encoding.PositionalEncoding(d_model, max_seq_length,dropout)
 
-        self.encoder = encoder.Encoder(nb_heads, d_model, nb_layers, d_ff, dropout)
+        self.encoder = encoder.Encoder(nb_layers, d_model, nb_heads, d_ff, dropout)
         self.decoder = decoder.Decoder(nb_layers, d_model, nb_heads, d_ff, dropout)
 
         self.linear = nn.Linear(d_model, target_vocab)
 
 
     def forward(self, source, target, src_mask=None, target_mask=None):
-        src = self.source_embedding(src)
-        src = self.source_pe(src)
-        src = self.encoder(src, src_mask)
+        source = self.source_embedding(source)
+        source = self.source_pe(source)
+        source = self.encoder(source, src_mask)
 
         target = self.target_embedding(target)
-        target = self.source_pe(target)
-        target = self.decoder(target, src,src_mask, target_mask)
+        target = self.target_pe(target)
+        target = self.decoder(target, source,src_mask, target_mask)
 
         target = self.linear(target)
 

@@ -15,20 +15,10 @@ class DecoderBlock(nn.Module):
 
     def forward(self, x, encoder_output, src_mask = None, target_mask = None):
 
-        def self_attention_sublayer(x):
-            output, _ = attention.multi_head_attention(x, x, x, src_mask)
-            return output
-
-        x = self.residual1(x, self_attention_sublayer)
-
-        def cross_attention_sublayer(x):
-            output, _ = self.cross_attention(x, encoder_output, encoder_output, target_mask)
-
-            return output
-
-        x = self.residual2(x, cross_attention_sublayer)
-
+        x = self.residual1(x, lambda x: self.self_attention(x, x, x, target_mask)[0])
+        x = self.residual2(x, lambda x: self.cross_attention(x, encoder_output, encoder_output, None)[0])
         x = self.residual3(x, self.ff)
+
 
 
         return x
@@ -37,12 +27,12 @@ class DecoderBlock(nn.Module):
 class Decoder(nn.Module):
     def __init__(self, nb_layers, d_model, nb_heads, d_ff, dropout=0.1):
         super().__init__()
-        self.layers = nn.ModuleList([DecoderBlock(d_model, nb_heads, d_ff, dropout) for _ in range(nb_layers)])
+        self.layers = nn.ModuleList([DecoderBlock(d_model, d_ff,nb_heads, dropout) for _ in range(nb_layers)])
 
         self.norm = nn.LayerNorm(d_model)
 
     def forward(self, x, encoder_output, src_mask = None, target_mask = None):
-        for layer in self.laeyers:
+        for layer in self.layers:
             x = layer(x, encoder_output, src_mask, target_mask)
 
         x = self.norm(x)

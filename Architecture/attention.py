@@ -1,24 +1,24 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import math
 
 def scaled_dot_product(Q, K, V, mask=None):
     d_k = Q.shape[-1]
 
     numerator = Q @ K.transpose(-2, -1)
-    denom = torch.sqrt(d_k)
+    denom = math.sqrt(d_k)
     scores = numerator/denom
 
     if mask is not None:
-        scores = scores.mask_fill(~mask, -1e9)
+        scores = scores.masked_fill(~mask, -1e9)
 
     attention_weights = torch.softmax(scores, dim=-1)
-
     output = attention_weights @ V
 
 
     return output, attention_weights
+
 
 
 class multi_head_attention(nn.Module):
@@ -33,7 +33,7 @@ class multi_head_attention(nn.Module):
         self.w_o = nn.Linear(d_model, d_model)
 
     def forward(self, Q, K, V, mask = None):
-        batch_size = Q.size[0]
+        batch_size = Q.size(0)
 
         Q = self.w_q(Q)
         K = self.w_k(K)
