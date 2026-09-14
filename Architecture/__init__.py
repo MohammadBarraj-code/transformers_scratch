@@ -1,96 +1,215 @@
-VOCAB_SIZE = 20
+VOCAB_SIZE = 50260
 D_MODEL = 64
 NUM_HEADS = 4
 NUM_LAYERS = 2
 D_FF = 128
-SEQ_LEN = 10
-BATCH_SIZE = 32
-#prev 1000 epochs but trying to increase epoch count to see if we can overfit toy model 100%
-#output on 1000 epochs reisudal 2 src_mask none: [0,1,2,3,4,5,6,7,8,10,9]
-#output on 2000 epochs:[0,1,2,3,4,5,6,7,8,9,10]
 EPOCHS = 2000
 
-import torch, torch.nn as nn
-import transformer
 
-def generate_batch(batch_size, seq_len, vocab_size):
-  src = torch.randint(1, vocab_size, (batch_size, seq_len))
-  tgt_input = torch.cat([torch.zeros(batch_size, 1, dtype=torch.long), src], dim=1)   # ← ADD [0, src...]
-  tgt_output = torch.cat([src, torch.zeros(batch_size, 1, dtype=torch.long)], dim=1)  # ← ADD [src..., 0]
-  return src, tgt_input, tgt_output
+source_sentences = ["hello", "the cat", "goodbye", "cat", "dog", "blue", "red",
+                    "green", "house", "the cat is blue"]
+
+target_sentences = ["bonjour", "le chat", "au revoir", "chat", "chien", "bleu",
+                    "rouge", "vert", "maison", "le chat est bleu"]
+
+
+import matplotlib.pyplot as plt
+import transformer
+import torch, torch.nn as nn
+import tokenizer, attention, feed_forward_nn
+
+tokenizer = tokenizer.Tokenizer()
+
+def generate_batch(source_sentences, target_sentences, tokenizer):
+  src = tokenizer.batch_encoder(source_sentences)["input_ids"]
+  tgt = tokenizer.batch_encoder(target_sentences)["input_ids"]
+
+  return src, tgt
+
 
 model = transformer.Transformer(VOCAB_SIZE, VOCAB_SIZE, D_MODEL, NUM_HEADS, NUM_LAYERS, D_FF)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.tokenizer.pad_token_id)
 
 for epoch in range(EPOCHS):
-  # For each epoch:
-  #   1. Generate a batch
-  src, tgt_input, tgt_output = generate_batch(BATCH_SIZE, SEQ_LEN, VOCAB_SIZE)
-  #   2. Forward pass (feed src and tgt[:-1] as decoder input)
-  '''
-  Look at everything except the last token
-  '''
-  tgt_seq_len = tgt_input.shape[1]
-  tgt_mask = torch.tril(
-    torch.ones(tgt_seq_len, tgt_seq_len, dtype=torch.bool)
-    )
-  output = model(src, tgt_input, target_mask=tgt_mask)
-  #   3. Compare the output to tgt[1:] (Shifted by one - next token prediction)
-  '''
-  Spanish target: [<start>, Hola, mundo, <end>]
+  src, target = generate_batch(source_sentences, target_sentences, tokenizer)
+  tgt_input = target[:, :-1]
+  tgt_output = target[:, 1:]
 
-  Position 0:
-  > Decoder sees <start> (from tgt[:-1])
-  > Should predict: Hola <- This is tgt[1] the first element of tgt[1:]
+  src_mask = (src != 50259).unsqueeze(1).unsqueeze(2)
+  tgt_padding_mask = (tgt_input != tokenizer.tokenizer.pad_token_id).unsqueeze(1).unsqueeze(2)
 
-  Position 1:
-  > Decoder sees <start> <Hola> (from tgt[:-1])
-  > Should predict: mundo <- This is tgt[2] the second element of tgt[1:]
-  '''
+  tgt_padding_mask = (tgt_input != 50259).unsqueeze(1).unsqueeze(2)
+
+
+  tgt_length = tgt_input.size(1)
+
+  tgt_causal_mask = torch.tril(
+    torch.ones(tgt_length, tgt_length, dtype=torch.bool)
+  )
+
+  tgt_mask = tgt_padding_mask & tgt_causal_mask
+
+  output, _ = model(src, tgt_input, src_mask, tgt_mask)
+
   loss = criterion(output.view(-1, VOCAB_SIZE), tgt_output.reshape(-1))
 
-  #   4: Backprop and update
   optimizer.zero_grad()
   loss.backward()
   optimizer.step()
 
+
   if epoch % 10 == 0:
-    print(f"Epoch {epoch}, Loss: {loss.item()}")
-
-
-    # Post Training
+    print(f"Epoch {epoch}. Loss: {loss.item()}")
 
 model.eval()
 
-test_src = torch.tensor([[1,2,3,4,5,6,7,8,9,10]])
+def translate(sentence):
 
-output_seq = [0]
+    src_ids = tokenizer.encode(sentence)
 
-with torch.no_grad():
+    src = torch.tensor(
+        [src_ids],
+        dtype=torch.long
+    )
 
-    for i in range(SEQ_LEN):
+    src_mask = (
+        src != tokenizer.tokenizer.pad_token_id
+    ).unsqueeze(1).unsqueeze(2)
 
-        tgt_input = torch.tensor([output_seq])
+    output_ids = [
+        tokenizer.tokenizer.bos_token_id
+    ]
 
-        tgt_seq_len = tgt_input.size(1)
+    generation_steps = []
 
-        tgt_mask = torch.tril(
-            torch.ones(
-                tgt_seq_len,
-                tgt_seq_len,
-                dtype=torch.bool
+    with torch.no_grad():
+
+        for _ in range(10):
+
+            tgt_input = torch.tensor(
+                [output_ids],
+                dtype=torch.long
             )
-        )
 
-        output = model(
-            test_src,
-            tgt_input,
-            target_mask=tgt_mask
-        )
+            tgt_length = tgt_input.size(1)
 
-        next_token = output[:, -1, :].argmax(dim=-1).item()
+            tgt_causal_mask = torch.tril(
+                torch.ones(
+                    tgt_length,
+                    tgt_length,
+                    dtype=torch.bool
+                )
+            )
 
-        output_seq.append(next_token)
+            output, attention = model(
+                src,
+                tgt_input,
+                src_mask,
+                tgt_causal_mask
+            )
 
-print(output_seq)
+            # Predict next token
+            next_token = output[:, -1, :].argmax(
+                dim=-1
+            ).item()
+
+            output_ids.append(next_token)
+
+            generation_steps.append(
+                tokenizer.decode(output_ids)
+            )
+
+            if next_token == tokenizer.tokenizer.eos_token_id:
+                break
+
+    return (
+        tokenizer.decode(output_ids),
+        generation_steps,
+        attention,
+        src_ids,
+        output_ids
+    )
+
+
+# ============================================================
+# TRANSLATION
+# ============================================================
+
+translation, steps, attention, src_ids, output_ids = translate(
+    "the cat is blue"
+)
+
+print("INPUT:", "the cat is blue")
+print("OUTPUT:", translation)
+
+print("\nGENERATION:")
+
+for i, step in enumerate(steps):
+    print(f"Step {i + 1}: {step}")
+
+
+# ============================================================
+# ATTENTION HEATMAP
+# ============================================================
+
+# Average all attention heads
+# Shape: [target_length, source_length]
+
+attention_map = attention[0].mean(dim=0).cpu().numpy()
+
+
+# ============================================================
+# TOKEN LABELS
+# ============================================================
+
+source_tokens = [
+    tokenizer.tokenizer.decode([token])
+    for token in src_ids
+]
+
+# Attention was calculated BEFORE the final predicted token
+# was appended, so remove the final token from the labels.
+
+target_tokens = [
+    tokenizer.tokenizer.decode([token])
+    for token in output_ids[:-1]
+]
+
+
+# ============================================================
+# HEATMAP
+# ============================================================
+
+plt.figure(figsize=(10, 7))
+
+plt.imshow(
+    attention_map,
+    cmap="viridis",
+    aspect="auto"
+)
+
+plt.xticks(
+    range(len(source_tokens)),
+    source_tokens
+)
+
+plt.yticks(
+    range(len(target_tokens)),
+    target_tokens
+)
+
+plt.xlabel("Source Tokens")
+plt.ylabel("Decoder Input Tokens")
+
+plt.title(
+    "Transformer Cross-Attention"
+)
+
+plt.colorbar(
+    label="Attention Weight"
+)
+
+plt.tight_layout()
+
+plt.show()

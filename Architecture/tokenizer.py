@@ -1,5 +1,4 @@
 from transformers import GPT2Tokenizer
-import torch
 class Tokenizer:
     def __init__(self):
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")

@@ -26,8 +26,9 @@ class Transformer(nn.Module):
 
         target = self.target_embedding(target)
         target = self.target_pe(target)
-        target = self.decoder(target, source,src_mask, target_mask)
+
+        target, attention_weights = self.decoder(target, source,src_mask, target_mask)
 
         target = self.linear(target)
 
-        return target
+        return target, attention_weights

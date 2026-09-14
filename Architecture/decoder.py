@@ -16,12 +16,24 @@ class DecoderBlock(nn.Module):
     def forward(self, x, encoder_output, src_mask = None, target_mask = None):
 
         x = self.residual1(x, lambda x: self.self_attention(x, x, x, target_mask)[0])
+
+        cross_attention_weights = None
+
+        def cross_attention(x):
+            output, weights = self.cross_attention(x, encoder_output, encoder_output, src_mask)
+            nonlocal cross_attention_weights
+            cross_attention_weights = weights
+            return output
+
+        
+
         x = self.residual2(x, lambda x: self.cross_attention(x, encoder_output, encoder_output, None)[0])
         x = self.residual3(x, self.ff)
 
+        
 
 
-        return x
+        return x, cross_attention_weights
 
 
 class Decoder(nn.Module):
@@ -32,11 +44,12 @@ class Decoder(nn.Module):
         self.norm = nn.LayerNorm(d_model)
 
     def forward(self, x, encoder_output, src_mask = None, target_mask = None):
+        cross_attention_weights= None
         for layer in self.layers:
             x = layer(x, encoder_output, src_mask, target_mask)
 
         x = self.norm(x)
 
-        return x
+        return x, cross_attention_weights
 
         
