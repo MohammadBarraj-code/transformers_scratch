@@ -2,4 +2,6 @@
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
-Notebooks(testing)/
+notebooks/
+Architecture/wmt14_test.py
+Architecture/__init__.py
